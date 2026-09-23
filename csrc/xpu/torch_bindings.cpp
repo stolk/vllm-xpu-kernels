@@ -278,6 +278,29 @@ TORCH_LIBRARY_EXPAND(TORCH_EXTENSION_NAME, xpu_ops) {
       "deepseek_fused_indexer_q_rope_mxfp4",
       torch::kXPU,
       &deepseek_fused_indexer_q_rope_mxfp4);
+
+  // INT8 lm_head ops
+  xpu_ops.def(
+      "int8_gemm_w8a8(Tensor A, Tensor A_scale, Tensor B, Tensor B_scale, "
+      "ScalarType? out_dtype, Tensor? bias) -> Tensor");
+  xpu_ops.impl("int8_gemm_w8a8", torch::kXPU, &int8_gemm_w8a8);
+
+  xpu_ops.def(
+      "int8_gemm_w8a8_out(Tensor A, Tensor A_scale, Tensor B, Tensor B_scale, "
+      "Tensor! output, Tensor? bias) -> Tensor");
+  xpu_ops.impl("int8_gemm_w8a8_out", torch::kXPU, &int8_gemm_w8a8_out);
+
+  xpu_ops.def("per_token_quant_int8_xpu(Tensor x) -> (Tensor, Tensor)");
+  xpu_ops.impl("per_token_quant_int8_xpu", torch::kXPU, &per_token_quant_int8_xpu);
+
+  xpu_ops.def(
+      "per_token_quant_int8_xpu_out(Tensor x, Tensor! q, Tensor! scales) -> "
+      "(Tensor, Tensor)");
+  xpu_ops.impl(
+      "per_token_quant_int8_xpu_out",
+      torch::kXPU,
+      &per_token_quant_int8_xpu_out);
+
 }
 
 REGISTER_EXTENSION(TORCH_EXTENSION_NAME)

@@ -47,6 +47,8 @@ enum class joint_dtypes_t {
   bf16_f8_e5m2,
   f16_f8_e4m3,
   bf16_f8_e4m3,
+  s8_s8_f16,
+  s8_s8_bf16,
   f8_e5m2_f16,
   f8_e5m2_bf16,
   f8_e4m3_f16,
@@ -97,6 +99,26 @@ struct onednn_types_mapper<joint_dtypes_t::u8_int4> {
       get() {
     return std::make_tuple(
         memory::data_type::u8, memory::data_type::u4, memory::data_type::f16);
+  }
+};
+
+template <>
+struct onednn_types_mapper<joint_dtypes_t::s8_s8_f16> {
+  static inline std::
+      tuple<memory::data_type, memory::data_type, memory::data_type>
+      get() {
+    return std::make_tuple(
+        memory::data_type::s8, memory::data_type::s8, memory::data_type::f16);
+  }
+};
+
+template <>
+struct onednn_types_mapper<joint_dtypes_t::s8_s8_bf16> {
+  static inline std::
+      tuple<memory::data_type, memory::data_type, memory::data_type>
+      get() {
+    return std::make_tuple(
+        memory::data_type::s8, memory::data_type::s8, memory::data_type::bf16);
   }
 };
 
@@ -707,7 +729,8 @@ class primitive_ext : public primitive {
       const stream& astream,
       const engine& aengine,
       std::vector<std::pair<int, void*>>&& handles,
-      int slot_off = 2) {
+      int slot_off = 2,
+      std::vector<sycl::event> deps = {}) {
     auto off = slot_off;
     for (const auto& p : handles) {
       auto& m_arg = mem_arg_cache[off];
@@ -722,7 +745,6 @@ class primitive_ext : public primitive {
     }
 
     sycl::event return_event;
-    std::vector<sycl::event> deps{};
     error::wrap_c_api(
         dnnl_sycl_interop_primitive_execute(
             this->get(), astream.get(), off, c_args, &deps, &return_event),
@@ -990,6 +1012,36 @@ static inline primitive_ext& matmul_primitive_create_and_cache(
           batch_dim);
     case joint_dtypes_t::s8_int4:
       return matmul_primitive_create_and_cache<joint_dtypes_t::s8_int4, F>(
+          Tt,
+          b_type,
+          m,
+          n,
+          k,
+          lda,
+          ldb,
+          ldc,
+          device_id,
+          attr,
+          scale_group_size,
+          zp_group_size,
+          batch_dim);
+    case joint_dtypes_t::s8_s8_f16:
+      return matmul_primitive_create_and_cache<joint_dtypes_t::s8_s8_f16, F>(
+          Tt,
+          b_type,
+          m,
+          n,
+          k,
+          lda,
+          ldb,
+          ldc,
+          device_id,
+          attr,
+          scale_group_size,
+          zp_group_size,
+          batch_dim);
+    case joint_dtypes_t::s8_s8_bf16:
+      return matmul_primitive_create_and_cache<joint_dtypes_t::s8_s8_bf16, F>(
           Tt,
           b_type,
           m,

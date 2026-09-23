@@ -3,6 +3,7 @@
 #include "fp8_gemm_w8a8.h"
 #include "fp8_gemm_w8a16.h"
 #include "int4_gemm_w4a16.h"
+#include "int8_gemm_w8a8.h"
 #include "int4_gemm_w4a8.h"
 
 inline bool is_supported_fp8(at::ScalarType t) {
@@ -255,3 +256,48 @@ torch::Tensor int4_gemm_w4a8(
 
   return result;
 }
+
+// INT8 W8A8 GEMM wrappers
+torch::Tensor int8_gemm_w8a8(
+    const torch::Tensor& A,
+    const torch::Tensor& A_scale,
+    const torch::Tensor& B,
+    const torch::Tensor& B_scale,
+    std::optional<c10::ScalarType> out_dtype,
+    const std::optional<torch::Tensor>& bias_) {
+  const at::DeviceGuard device_guard(A.device());
+  torch::Tensor result = check_and_create_output_tensor(A, B, out_dtype);
+  bool is_nt = B.strides()[B.dim() - 2] == 1;
+  oneDNN::dnnl_matmul_w8a8_int8(result, A, A_scale, B, B_scale, is_nt, bias_);
+  return result;
+}
+
+
+torch::Tensor int8_gemm_w8a8_out(
+    const torch::Tensor& A,
+    const torch::Tensor& A_scale,
+    const torch::Tensor& B,
+    const torch::Tensor& B_scale,
+    torch::Tensor& output,
+    const std::optional<torch::Tensor>& bias_) {
+  const at::DeviceGuard device_guard(A.device());
+  torch::Tensor expected = check_and_create_output_tensor(
+      A, B, output.scalar_type());
+  TORCH_CHECK(output.is_xpu(), "int8_gemm_w8a8_out output must be XPU");
+  TORCH_CHECK(output.is_contiguous(), "int8_gemm_w8a8_out output must be contiguous");
+  TORCH_CHECK(
+      output.sizes() == expected.sizes(),
+      "int8_gemm_w8a8_out output shape mismatch: expected ",
+      expected.sizes(),
+      " got ",
+      output.sizes());
+  TORCH_CHECK(
+      output.scalar_type() == torch::kFloat16 ||
+          output.scalar_type() == torch::kBFloat16,
+      "int8_gemm_w8a8_out output must be float16 or bfloat16");
+  bool is_nt = B.strides()[B.dim() - 2] == 1;
+  oneDNN::dnnl_matmul_w8a8_int8(
+      output, A, A_scale, B, B_scale, is_nt, bias_);
+  return output;
+}
+
