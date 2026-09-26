@@ -147,21 +147,14 @@ def _gemm_reference(x_q, x_scale, w_q_t, w_scale, bias):
     return out
 
 
-# Weight scales in bf16/fp16 reach oneDNN as bf16/fp16 scale memory
-# (get_onednn_dtype(m2_sc) in int8_gemm_w8a8.h) and the result is NaN rather
-# than an error. vLLM's INT8 lm_head uses fp32 unless
-# VLLM_XPU_LM_HEAD_INT8_SCALE_DTYPE says otherwise. strict: a fix must be
-# noticed and this marker removed.
-_NAN_WITH_HALF_SCALES = pytest.mark.xfail(
-    strict=True, reason="int8_gemm_w8a8 returns NaN with bf16/fp16 weight scales")
+# All scale dtypes run in one process on purpose: the oneDNN primitive cache
+# once ignored the scale dtype, so bf16/fp16 scales reused a primitive built
+# for fp32 ones and read past the end of the scale buffer (NaN or GPU fault).
 
 
 @pytest.mark.parametrize("with_bias", [False, True])
 @pytest.mark.parametrize("scale_dtype", [
-    torch.float32,
-    pytest.param(torch.bfloat16, marks=_NAN_WITH_HALF_SCALES),
-    pytest.param(torch.float16, marks=_NAN_WITH_HALF_SCALES),
-])
+    torch.float32, torch.bfloat16, torch.float16])
 @pytest.mark.parametrize("out_dtype", [torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("mnk", GEMM_MNK)
 def test_gemm_matches_exact_reference(mnk, out_dtype, scale_dtype, with_bias):
