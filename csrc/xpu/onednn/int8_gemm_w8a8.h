@@ -125,7 +125,13 @@ static inline void dnnl_matmul_w8a8_int8(
   at::Device curDevice = at::Device(at::kXPU, dev_id);
   auto engine = GpuEngineManager::Instance().get_engine(curDevice);
 
-  int sc_group_size = ((m1_sc.numel() == 1 ? 1 : 2) << 8) |
+  // The primitive cache key does not see the scale data types that f_attr
+  // bakes into the primitive, so fold them in here. Otherwise a primitive
+  // built for fp32 scales is reused for bf16/fp16 ones and reads past the end
+  // of the scale buffer (NaN, or a GPU page fault).
+  int sc_group_size = (static_cast<int>(get_onednn_dtype(m1_sc)) << 24) |
+                      (static_cast<int>(get_onednn_dtype(m2_sc)) << 16) |
+                      ((m1_sc.numel() == 1 ? 1 : 2) << 8) |
                       (m2_sc.numel() == 1 ? 1 : 2);
   auto& matmul_ext = matmul_primitive_create_and_cache(
       jd, tt, b_type, m, n, k, lda, ldb, ldc, dev_id, f_attr, sc_group_size);
